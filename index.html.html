@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TimeClock — Employee Attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;
+  --border:#e2e0d8;--border2:#ccc9be;
+  --text:#1a1917;--text2:#6b6960;--text3:#a09d94;
+  --accent:#1a1917;--accent-fg:#fff;
+  --green:#15803d;--green-bg:#dcfce7;--green-b:#86efac;
+  --amber:#92580a;--amber-bg:#fef9c3;--amber-b:#fde047;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-b:#fca5a5;
+  --blue:#1d4ed8;--blue-bg:#dbeafe;--blue-b:#93c5fd;
+  --r:8px;--rl:12px;
+}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+#app{max-width:1080px;margin:0 auto;padding:0 16px 60px}
+
+/* LOADING OVERLAY */
+#loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:16px}
+#loading-overlay .spin{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-overlay p{font-size:13px;color:var(--text2)}
+
+/* SYNC INDICATOR */
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px}
+.sync-dot.syncing{background:var(--amber);animation:pulse 1s infinite}
+.sync-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 0 14px;border-bottom:1px solid var(--border);margin-bottom:0;flex-wrap:wrap;gap:8px}
+.brand{display:flex;align-items:center;gap:9px}
+.brand-icon{font-size:22px}
+.brand-name{font-size:17px;font-weight:600;letter-spacing:-.3px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.live-clock{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text2);background:var(--surface2);padding:4px 12px;border-radius:99px;border:1px solid var(--border)}
+.sync-status{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px}
+
+.tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px;flex-wrap:wrap}
+.tab{padding:10px 15px;font-size:13px;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text2);margin-bottom:-1px;font-weight:400;font-family:inherit;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:color .15s}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);border-bottom-color:var(--text);font-weight:500}
+.sec{display:none}.sec.on{display:block}
+
+.ph2{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.ph2 h1{font-size:22px;font-weight:600;letter-spacing:-.4px}
+.ph2 p{font-size:13px;color:var(--text2);margin-top:2px}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem 1.25rem;margin-bottom:1rem}
+.ph{font-size:13px;font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:1rem}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:.75rem 1rem}
+.sl{font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:500}
+.sv{font-size:22px;font-weight:600;letter-spacing:-.5px}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld label{font-size:11px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:.4px}
+.fld input,.fld select{font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);width:100%;font-family:inherit;transition:border-color .15s}
+.fld input:focus,.fld select:focus{outline:none;border-color:var(--accent)}
+
+.btn{padding:7px 14px;border-radius:var(--r);font-size:12px;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-weight:500;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:background .15s,opacity .15s}
+.btn:hover{background:var(--surface2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-p{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn-p:hover{opacity:.83}
+.btn-d{color:var(--red);border-color:var(--red-b)}
+.btn-d:hover{background:var(--red-bg)}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+.search-bar{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:var(--r);padding:6px 12px;margin-bottom:12px;background:var(--surface);font-size:13px;color:var(--text2)}
+.search-bar input{border:none;outline:none;background:none;font-size:13px;color:var(--text);flex:1;font-family:inherit}
+
+.egrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:12px;margin-bottom:1rem}
+.ec{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:.9rem;position:relative}
+.av{width:36px;height:36px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;color:var(--blue);flex-shrink:0}
+.en{font-weight:500;font-size:13px}.er{font-size:11px;color:var(--text2)}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500}
+.b-in{background:var(--green-bg);color:var(--green)}
+.b-lv{background:var(--amber-bg);color:var(--amber)}
+.b-out{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.b-mo{background:var(--blue-bg);color:var(--blue)}
+.b-ab{background:var(--red-bg);color:var(--red)}
+
+.confirm-box{display:none;position:absolute;bottom:8px;left:8px;right:8px;background:var(--surface);border:1px solid var(--red-b);border-radius:var(--r);padding:8px 10px;font-size:12px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.confirm-box.show{display:block}
+.confirm-msg{color:var(--red);margin-bottom:8px;font-weight:500}
+.confirm-btns{display:flex;gap:6px}
+
+.tbl-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.tbl th{text-align:left;font-size:11px;color:var(--text2);padding:6px 8px;border-bottom:1px solid var(--border);font-weight:500;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;background:var(--surface2)}
+.tbl td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--surface2)}
+.ot{color:var(--amber);font-weight:500}
+
+.fr{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.fr select,.fr input[type=month],.mo-inp{padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);font-family:inherit}
+
+.emp-hero{background:var(--accent);border-radius:var(--rl);padding:1.1rem 1.25rem;display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:1rem}
+.emp-av{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#fff;flex-shrink:0}
+.emp-nm{font-size:18px;font-weight:500;color:#fff}
+.emp-rl{font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+
+.tc-bar{display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:12px 16px}
+.tc-bar-lbl{font-size:13px;color:var(--text2);white-space:nowrap;font-weight:500}
+.tc-bar select{flex:1;min-width:200px;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit}
+
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-title{font-size:14px;font-weight:500}
+.cal-hdr{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:6px;text-align:center;font-size:11px;color:var(--text2);font-weight:500;padding:3px 0}
+.cal-body{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:4px}
+.cal-day{min-height:36px;border-radius:var(--r);border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--text);transition:background .12s}
+.cal-day:hover{background:var(--surface2)}
+.cal-day.empty{background:none;border-color:transparent;cursor:default}
+.cal-day.leave{background:var(--amber-bg);border-color:var(--amber-b)}
+.cal-day.leave .cal-num{color:var(--amber)}
+.cal-day.has-rec{background:var(--green-bg);border-color:var(--green-b)}
+.cal-day.has-rec .cal-num{color:var(--green)}
+.cal-day.absent-rec{background:var(--red-bg);border-color:var(--red-b)}
+.cal-day.absent-rec .cal-num{color:var(--red)}
+.cal-day.today-cell{border-width:2px;border-color:var(--accent)}
+.cal-num{font-size:12px;font-weight:500}
+.cal-dot{width:5px;height:5px;border-radius:50%}
+.cal-legend{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)}
+.cal-legend span{display:flex;align-items:center;gap:5px}
+.leg{display:inline-block;width:11px;height:11px;border-radius:3px}
+
+.share-row{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px}
+.share-url{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.share-row{transition:background .15s,border-color .15s}
+.share-row:active{transform:scale(.99)}
+
+.toast{font-size:12px;color:var(--green);margin-top:6px;display:none}
+.err{font-size:12px;color:var(--red);min-height:16px}
+.empty-state{text-align:center;padding:3rem;color:var(--text3);font-size:14px;line-height:2}
+
+@media(max-width:640px){
+  .two-col{grid-template-columns:1fr}
+  .g2{grid-template-columns:1fr}
+  .g3{grid-template-columns:1fr 1fr}
+  .ph2 h1{font-size:18px}
+}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spin"></div>
+  <p>Connecting to database…</p>
+</div>
+
+<div id="app" style="display:none">
+
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">⏱</span><span class="brand-name">TimeClock</span></div>
+    <div class="topbar-right">
+      <div class="sync-status"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Synced</span></div>
+      <div class="live-clock" id="live-clock">--:--:--</div>
+    </div>
+  </header>
+
+  <div class="tab-bar">
+    <button class="tab on" data-tab="dash" onclick="showTab('dash')">📊 Dashboard</button>
+    <button class="tab" data-tab="emp" onclick="showTab('emp')">👥 Employees</button>
+    <button class="tab" data-tab="log" onclick="showTab('log')">📅 Attendance log</button>
+    <button class="tab" data-tab="tc" onclick="showTab('tc')">🕐 Timecard</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="s-dash" class="sec on">
+    <div class="ph2"><div><h1>Dashboard</h1><p id="today-date"></p></div></div>
+    <div class="sgrid" id="d-stats"></div>
+    <div class="two-col">
+      <div class="card" style="margin-bottom:0"><div class="ph">✅ Today's status</div><div id="d-today"></div></div>
+      <div class="card" style="margin-bottom:0"><div class="ph">⚡ Recent activity</div><div id="d-activity"></div></div>
+    </div>
+  </div>
+
+  <!-- EMPLOYEES -->
+  <div id="s-emp" class="sec">
+    <div class="ph2"><h1>Employees</h1></div>
+    <div class="card">
+      <div class="ph">➕ Add employee</div>
+      <div class="g2">
+        <div class="fld"><label>Full name *</label><input id="n-name" placeholder="e.g. Santos, Maria"/></div>
+        <div class="fld"><label>Employee ID *</label><input id="n-id" placeholder="e.g. EMP-032"/></div>
+      </div>
+      <div class="g2">
+        <div class="fld"><label>Role</label><input id="n-role" placeholder="e.g. Machine Operator"/></div>
+        <div class="fld"><label>MO allowance</label>
+          <select id="n-op"><option value="0">None</option><option value="1">Machine operator (MO)</option></select>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-p" onclick="addEmp()">+ Add employee</button>
+        <span class="err" id="n-err"></span>
+      </div>
+    </div>
+    <div class="search-bar">🔍 <input id="emp-q" placeholder="Search by name or ID…" oninput="renderEmpGrid()"/></div>
+    <div class="egrid" id="emp-grid"></div>
+  </div>
+
+  <!-- ATTENDANCE LOG -->
+  <div id="s-log" class="sec">
+    <div class="ph2">
+      <h1>Attendance log</h1>
+      <button class="btn btn-sm" onclick="exportLogCSV()">↓ Export CSV</button>
+    </div>
+    <div class="fr">
+      <select id="fl-emp" onchange="renderLog()"><option value="">All employees</option></select>
+      <input type="month" id="fl-mo" onchange="renderLog()"/>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:130px">Employee</th><th style="width:88px">Date</th>
+          <th style="width:52px">In</th><th style="width:52px">Out</th>
+          <th style="width:60px">Reg hrs</th><th style="width:60px">OT hrs</th>
+          <th style="width:72px">Allowance</th><th style="width:65px">Status</th><th>Notes</th>
+        </tr></thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TIMECARD -->
+  <div id="s-tc" class="sec">
+    <div class="ph2"><h1>Timecard</h1></div>
+    <div class="tc-bar">
+      <span class="tc-bar-lbl">👤 Select employee</span>
+      <select id="tc-sel" onchange="loadTC()"><option value="">— choose employee —</option></select>
+    </div>
+    <div id="tc-empty" class="empty-state">🕐<br><br>Select an employee to view their timecard</div>
+    <div id="tc-main" style="display:none">
+      <div class="emp-hero" id="emp-hero"></div>
+      <div class="sgrid" id="tc-stats"></div>
+      <div class="card" id="tc-edit-card">
+        <div class="ph">✏️ Add / edit daily record</div>
+        <div class="g2">
+          <div class="fld"><label>Date *</label><input type="date" id="f-date"/></div>
+          <div class="fld"><label>Status</label>
+            <select id="f-status" onchange="toggleTCFields()">
+              <option value="present">Present</option>
+              <option value="leave">Leave</option>
+              <option value="absent">Absent</option>
+            </select>
+          </div>
+        </div>
+        <div id="tc-time-fields">
+          <div class="g3">
+            <div class="fld"><label>Clock in</label><input type="time" id="f-ci"/></div>
+            <div class="fld"><label>Clock out</label><input type="time" id="f-co"/></div>
+            <div class="fld"><label>Reg hours</label><input type="number" id="f-reg" min="0" max="24" step="0.5" placeholder="e.g. 8"/></div>
+          </div>
+          <div class="g3">
+            <div class="fld"><label>Overtime hours</label><input type="number" id="f-ot" min="0" max="24" step="0.5" placeholder="e.g. 2"/></div>
+            <div class="fld"><label>Allowance (₱)</label><input type="number" id="f-allow" min="0" step="1" placeholder="e.g. 50"/></div>
+            <div class="fld"><label>Notes</label><input type="text" id="f-notes" placeholder="optional"/></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <button class="btn btn-p" id="save-btn" onclick="saveRecord()">💾 Save</button>
+          <button class="btn" onclick="clearTCForm()">✕ Clear</button>
+          <span class="err" id="f-err"></span>
+        </div>
+        <div class="toast" id="f-toast">✓ Record saved!</div>
+      </div>
+      <div class="card">
+        <div class="cal-nav">
+          <button class="btn btn-sm" onclick="calPrev()">‹</button>
+          <span class="cal-title" id="cal-title"></span>
+          <button class="btn btn-sm" onclick="calNext()">›</button>
+        </div>
+        <div class="cal-hdr"><div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div></div>
+        <div class="cal-body" id="cal-body"></div>
+        <div class="cal-legend">
+          <span><span class="leg" style="background:var(--green-bg);border:1px solid var(--green-b)"></span> Present</span>
+          <span><span class="leg" style="background:var(--amber-bg);border:1px solid var(--amber-b)"></span> Leave</span>
+          <span><span class="leg" style="background:var(--red-bg);border:1px solid var(--red-b)"></span> Absent</span>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <div class="ph" style="margin-bottom:0">📜 Records — <span id="rec-mo-label"></span></div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input type="month" id="tc-filter-mo" class="mo-inp" onchange="renderTCTable();renderCal();renderTCStats()"/>
+            <button class="btn btn-sm" onclick="exportTCCSV()">↓ CSV</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr>
+              <th style="width:88px">Date</th><th style="width:52px">In</th><th style="width:52px">Out</th>
+              <th style="width:60px">Reg hrs</th><th style="width:60px">OT hrs</th>
+              <th style="width:72px">Allowance</th><th style="width:65px">Status</th>
+              <th>Notes</th><th style="width:72px">Actions</th>
+            </tr></thead>
+            <tbody id="tc-rec-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" id="tc-share-card">
+        <div class="ph">🔗 Shareable link</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Share this with the employee — they can view their own timecard from any device.</p>
+        <div class="share-row" onclick="copyLink()" title="Click to copy" style="cursor:pointer;user-select:none" onmouseenter="this.style.background='var(--border)'" onmouseleave="this.style.background='var(--surface2)'">
+          <span style="font-size:16px;flex-shrink:0">📋</span>
+          <span id="sh-url" class="share-url" style="flex:1"></span>
+          <span style="font-size:11px;color:var(--text2);white-space:nowrap;font-weight:500;flex-shrink:0" id="sh-cta">Click to copy</span>
+        </div>
+        <div class="toast" id="sh-toast">✓ Link copied to clipboard!</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, getDoc, getDocs,
+  onSnapshot, deleteDoc, writeBatch, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* ── Firebase init ── */
+const firebaseConfig = {
+  apiKey: "AIzaSyD5aj1ztcvLafWfa5060qm7J8R1caI3fFw",
+  authDomain: "timeclock-3b2f3.firebaseapp.com",
+  projectId: "timeclock-3b2f3",
+  storageBucket: "timeclock-3b2f3.firebasestorage.app",
+  messagingSenderId: "807626150859",
+  appId: "1:807626150859:web:6357ba86f7e95bb4c9dc4e"
+};
+const fireApp = initializeApp(firebaseConfig);
+const db = getFirestore(fireApp);
+
+/* ── State ── */
+const ROSTER = [
+  {id:'EMP-001',name:'Almoroto, Renelou'},{id:'EMP-002',name:'Acuna, Nathaniel'},
+  {id:'EMP-003',name:'Asong, Rene'},{id:'EMP-004',name:'Barona, Jupiter'},
+  {id:'EMP-005',name:'Benian, Teodoro Jr.'},{id:'EMP-006',name:'Busbus, Eric'},
+  {id:'EMP-007',name:'Cadiz, Alvin Mark'},{id:'EMP-008',name:'Cruz, Christian'},
+  {id:'EMP-009',name:'Dela Cruz, Minda'},{id:'EMP-010',name:'Dela Cruz, Ricardo'},
+  {id:'EMP-011',name:'Estocapio, Divine'},{id:'EMP-012',name:'Espanol, Jinkie'},
+  {id:'EMP-013',name:'Domingo, Jocelyn'},{id:'EMP-014',name:'Garsain, Minerva'},
+  {id:'EMP-015',name:'Geraldo, Lara Jean'},{id:'EMP-016',name:'Guarte, Violy'},
+  {id:'EMP-017',name:'Guray, Jennifer'},{id:'EMP-018',name:'Jaromay, Jerome'},
+  {id:'EMP-019',name:'Lao, Evangeline'},{id:'EMP-020',name:'Parcasio, Estella Mari'},
+  {id:'EMP-021',name:'Pastor, Allan'},{id:'EMP-022',name:'Postrado, Araceli'},
+  {id:'EMP-023',name:'Raygon, Oliver'},{id:'EMP-024',name:'Romero, Vincent'},
+  {id:'EMP-025',name:'Romero, Mary Jane'},{id:'EMP-026',name:'Sanchez, Rene'},
+  {id:'EMP-027',name:'Torral, Larry'},{id:'EMP-028',name:'Trimidal, Ronald'},
+  {id:'EMP-029',name:'Veneranda, Sian'},{id:'EMP-030',name:'Vermon, Bonifacio'},
+  {id:'EMP-031',name:'Villanueva, Michael'},
+];
+
+let employees = [];   // live from Firestore
+let activity  = [];   // live from Firestore
+let curId = null;
+let calY  = new Date().getFullYear();
+let calM  = new Date().getMonth();
+let currentTab = 'dash';
+
+/* ── Sync indicator ── */
+function setSyncing(state){ // 'ok' | 'syncing' | 'error'
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot' + (state==='syncing'?' syncing':state==='error'?' error':'');
+  lbl.textContent = state==='syncing'?'Syncing…':state==='error'?'Offline':'Synced';
+}
+
+/* ── Helpers ── */
+function ini(n){return n.replace(/,/g,' ').trim().split(/\s+/).slice(0,2).map(w=>w[0]?w[0].toUpperCase():'').join('')}
+function todStr(){return new Date().toISOString().split('T')[0]}
+function getE(id){return employees.find(e=>e.id===id)}
+function getR(emp,date){return (emp.recs||[]).find(r=>r.date===date)}
+function sbadge(st){
+  if(st==='present')return'<span class="badge b-in">Present</span>';
+  if(st==='leave')  return'<span class="badge b-lv">Leave</span>';
+  if(st==='absent') return'<span class="badge b-ab">Absent</span>';
+  return'<span class="badge b-out">—</span>';
+}
+function todayStatus(emp){const r=getR(emp,todStr());return r?sbadge(r.st):'<span class="badge b-out">Not in</span>';}
+
+/* ── Firestore helpers ── */
+const empCol  = () => collection(db,'employees');
+const actCol  = () => collection(db,'activity');
+
+async function ensureRoster(){
+  // Write any missing roster employees to Firestore
+  const snap = await getDocs(empCol());
+  const existing = new Set(snap.docs.map(d=>d.id));
+  const batch = writeBatch(db);
+  let added = 0;
+  ROSTER.forEach(r=>{
+    if(!existing.has(r.id)){
+      batch.set(doc(db,'employees',r.id),{id:r.id,name:r.name,role:'',isMO:false,recs:[]});
+      added++;
+    }
+  });
+  if(added>0) await batch.commit();
+}
+
+async function saveEmp(emp){
+  setSyncing('syncing');
+  try{
+    await setDoc(doc(db,'employees',emp.id),emp);
+    setSyncing('ok');
+  }catch(e){setSyncing('error');console.error(e);}
+}
+
+async function removeEmpDB(id){
+  setSyncing('syncing');
+  try{
+    await deleteDoc(doc(db,'employees',id));
+    setSyncing('ok');
+  }catch(e){setSyncing('error');console.error(e);}
+}
+
+async function logActivity(msg){
+  try{
+    const id = Date.now().toString();
+    await setDoc(doc(db,'activity',id),{msg,t:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+  }catch(e){console.error(e);}
+}
+
+/* ── Real-time listeners ── */
+function startListeners(onFirstLoad){
+  let firstLoad=true;
+  // Employees — real-time
+  onSnapshot(empCol(), snap=>{
+    employees = snap.docs
+      .map(d=>({...d.data()}))
+      .sort((a,b)=>a.name.localeCompare(b.name));
+    if(firstLoad){ firstLoad=false; onFirstLoad(); }
+    else refreshCurrentTab();
+  }, err=>{ setSyncing('error'); console.error(err); });
+
+  // Activity — real-time
+  onSnapshot(actCol(), snap=>{
+    activity = snap.docs
+      .map(d=>d.data())
+      .sort((a,b)=>b.ts-a.ts)
+      .slice(0,20);
+    if(currentTab==='dash') renderActivity();
+  });
+}
+
+function refreshCurrentTab(){
+  setSyncing('ok');
+  if(currentTab==='dash')renderDash();
+  if(currentTab==='emp')renderEmpGrid();
+  if(currentTab==='log'){renderLogFilters();renderLog();}
+  if(currentTab==='tc'){syncTCSel();if(curId){renderTCStats();renderCal();renderTCTable();renderHero();}}
+}
+
+/* ── Clock ── */
+function startClock(){
+  const el=document.getElementById('live-clock');
+  const tick=()=>el.textContent=new Date().toLocaleTimeString();
+  tick();setInterval(tick,1000);
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab,.sec').forEach(x=>x.classList.remove('on'));
+  document.getElementById('s-'+t).classList.add('on');
+  document.querySelector('.tab[data-tab="'+t+'"]').classList.add('on');
+  if(t==='dash')renderDash();
+  if(t==='emp')renderEmpGrid();
+  if(t==='log'){renderLogFilters();renderLog();}
+  if(t==='tc')syncTCSel();
+}
+window.showTab=showTab;
+
+/* ── Dashboard ── */
+function renderDash(){
+  const d=new Date();
+  const el=document.getElementById('today-date');
+  if(el)el.textContent=d.toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  let pres=0,lv=0;
+  employees.forEach(e=>{const r=getR(e,todStr());if(r){if(r.st==='present')pres++;if(r.st==='leave')lv++;}});
+  document.getElementById('d-stats').innerHTML=[
+    ['Total staff',employees.length,''],
+    ['Present today',pres,'color:var(--green)'],
+    ['On leave',lv,'color:var(--amber)'],
+    ['MO operators',employees.filter(e=>e.isMO).length,'color:var(--blue)'],
+  ].map(([l,v,s])=>`<div class="sc"><div class="sl">${l}</div><div class="sv" style="${s}">${v}</div></div>`).join('');
+  document.getElementById('d-today').innerHTML=employees.map(e=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div class="av" style="width:26px;height:26px;font-size:10px;flex-shrink:0">${ini(e.name)}</div>
+      <div style="flex:1;min-width:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</div>
+      ${todayStatus(e)}
+    </div>`).join('')||'<div style="color:var(--text3);padding:1rem;font-size:13px">No employees yet</div>';
+  renderActivity();
+}
+function renderActivity(){
+  document.getElementById('d-activity').innerHTML=activity.length
+    ?activity.slice(0,8).map(a=>`
+      <div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--green);margin-top:5px;flex-shrink:0"></div>
+        <div><div style="color:var(--text2)">${a.msg}</div><div style="font-size:11px;color:var(--text3)">${a.t}</div></div>
+      </div>`).join('')
+    :'<div style="color:var(--text3);padding:1rem;font-size:13px">No activity yet</div>';
+}
+
+/* ── Employees ── */
+function renderEmpGrid(){
+  const q=(document.getElementById('emp-q')?.value||'').toLowerCase();
+  const list=employees.filter(e=>e.name.toLowerCase().includes(q)||e.id.toLowerCase().includes(q));
+  const grid=document.getElementById('emp-grid');
+  grid.innerHTML='';
+  if(!list.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--text3)">No employees found</div>';return;}
+  list.forEach(e=>{
+    const div=document.createElement('div');div.className='ec';
+    div.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div class="av">${ini(e.name)}</div>
+        <div style="min-width:0">
+          <div class="en" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}${e.isMO?' <span class="badge b-mo" style="font-size:10px">MO</span>':''}</div>
+          <div class="er">${e.id}${e.role?' · '+e.role:''}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">${todayStatus(e)}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm tc-btn">🕐 Timecard</button>
+        <button class="btn btn-sm btn-d del-btn">🗑 Remove</button>
+      </div>
+      <div class="confirm-box" id="confirm-${e.id}">
+        <div class="confirm-msg">Remove ${e.name}?</div>
+        <div class="confirm-btns">
+          <button class="btn btn-sm btn-d yes-btn">Yes, remove</button>
+          <button class="btn btn-sm no-btn">Cancel</button>
+        </div>
+      </div>`;
+    div.querySelector('.tc-btn').addEventListener('click',()=>goTC(e.id));
+    div.querySelector('.del-btn').addEventListener('click',()=>{
+      document.querySelectorAll('.confirm-box.show').forEach(b=>{if(b.id!=='confirm-'+e.id)b.classList.remove('show');});
+      document.getElementById('confirm-'+e.id).classList.toggle('show');
+    });
+    div.querySelector('.yes-btn').addEventListener('click',()=>doRemoveEmp(e.id));
+    div.querySelector('.no-btn').addEventListener('click',()=>document.getElementById('confirm-'+e.id).classList.remove('show'));
+    grid.appendChild(div);
+  });
+}
+
+async function addEmp(){
+  const name=document.getElementById('n-name').value.trim();
+  const id=document.getElementById('n-id').value.trim().toUpperCase();
+  const role=document.getElementById('n-role').value.trim();
+  const isMO=document.getElementById('n-op').value==='1';
+  const err=document.getElementById('n-err');
+  if(!name||!id){err.textContent='Name and ID required';return}
+  if(employees.find(e=>e.id===id)){err.textContent='ID already exists';return}
+  err.textContent='';
+  const emp={id,name,role,isMO,recs:[]};
+  await saveEmp(emp);
+  await logActivity(`${name} added`);
+  ['n-name','n-id','n-role'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('n-op').value='0';
+}
+window.addEmp=addEmp;
+
+async function doRemoveEmp(id){
+  const emp=getE(id);if(!emp)return;
+  if(curId===id){curId=null;document.getElementById('tc-main').style.display='none';document.getElementById('tc-empty').style.display='block';document.getElementById('tc-sel').value='';}
+  await removeEmpDB(id);
+  await logActivity(`${emp.name} removed`);
+}
+
+function goTC(id){showTab('tc');setTimeout(()=>{document.getElementById('tc-sel').value=id;loadTC();},50);}
+window.goTC=goTC;
+
+/* ── Log ── */
+function renderLogFilters(){
+  const s=document.getElementById('fl-emp');const cur=s.value;
+  s.innerHTML='<option value="">All employees</option>'+employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  s.value=cur;
+  const m=document.getElementById('fl-mo');if(!m.value)m.value=todStr().slice(0,7);
+}
+function renderLog(){
+  const ef=document.getElementById('fl-emp')?.value||'',mf=document.getElementById('fl-mo')?.value||'';
+  let rows=[];
+  employees.forEach(e=>{if(ef&&e.id!==ef)return;(e.recs||[]).forEach(r=>{if(mf&&!r.date.startsWith(mf))return;rows.push({e,r});});});
+  rows.sort((a,b)=>b.r.date.localeCompare(a.r.date));
+  document.getElementById('log-body').innerHTML=rows.length
+    ?rows.map(({e,r})=>`<tr>
+        <td><div style="font-weight:500">${e.name}</div><div style="font-size:10px;color:var(--text2)">${e.id}</div></td>
+        <td>${r.date}</td><td>${r.ci||'—'}</td><td>${r.co||'—'}</td>
+        <td>${r.reg?r.reg+'h':'—'}</td><td>${r.ot?`<span class="ot">+${r.ot}h</span>`:'—'}</td>
+        <td>${r.allow?'₱'+parseFloat(r.allow).toLocaleString():'—'}</td>
+        <td>${sbadge(r.st)}</td><td style="color:var(--text2)">${r.notes||'—'}</td>
+      </tr>`).join('')
+    :'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No records found</td></tr>';
+}
+function exportLogCSV(){
+  const ef=document.getElementById('fl-emp')?.value||'',mf=document.getElementById('fl-mo')?.value||'';
+  let c='Employee,ID,Date,Clock In,Clock Out,Reg Hrs,OT Hrs,Allowance,Status,Notes\n';
+  employees.forEach(e=>{if(ef&&e.id!==ef)return;(e.recs||[]).forEach(r=>{if(mf&&!r.date.startsWith(mf))return;c+=`"${e.name}",${e.id},${r.date},${r.ci||''},${r.co||''},${r.reg||''},${r.ot||''},${r.allow||''},${r.st},"${r.notes||''}"\n`;});});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'}));a.download='attendance_log.csv';a.click();
+}
+window.renderLog=renderLog;
+window.exportLogCSV=exportLogCSV;
+
+/* ── Timecard ── */
+function syncTCSel(){
+  const s=document.getElementById('tc-sel');const cur=s.value;
+  s.innerHTML='<option value="">— choose employee —</option>'+employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  if(cur){s.value=cur;if(s.value)loadTC();}
+}
+function loadTC(){
+  const id=document.getElementById('tc-sel').value;curId=id;
+  const emp=getE(id);
+  document.getElementById('tc-main').style.display=emp?'block':'none';
+  document.getElementById('tc-empty').style.display=emp?'none':'block';
+  if(!emp)return;
+  document.getElementById('f-date').value=todStr();
+  document.getElementById('tc-filter-mo').value=todStr().slice(0,7);
+  calY=new Date().getFullYear();calM=new Date().getMonth();
+  renderHero();renderTCStats();renderCal();renderTCTable();
+  const baseUrl=location.href.split('?')[0];
+  document.getElementById('sh-url').textContent=baseUrl+'?emp='+encodeURIComponent(id);
+}
+window.loadTC=loadTC;
+
+function renderHero(){
+  const e=getE(curId);if(!e)return;
+  document.getElementById('emp-hero').innerHTML=`<div class="emp-av">${ini(e.name)}</div><div><div class="emp-nm">${e.name}</div><div class="emp-rl">${e.id}${e.role?' · '+e.role:''}${e.isMO?' · Machine Operator':''}</div></div>`;
+}
+function renderTCStats(){
+  const e=getE(curId);if(!e)return;
+  const mo=document.getElementById('tc-filter-mo').value||todStr().slice(0,7);
+  let days=0,reg=0,ot=0,allow=0,lv=0;
+  (e.recs||[]).filter(r=>r.date.startsWith(mo)).forEach(r=>{
+    if(r.st==='leave'){lv++;return}if(r.st==='absent')return;
+    days++;reg+=parseFloat(r.reg)||0;ot+=parseFloat(r.ot)||0;allow+=parseFloat(r.allow)||0;
+  });
+  document.getElementById('tc-stats').innerHTML=[
+    ['Days present',days,''],['Reg hours',reg.toFixed(1)+'h',''],
+    ['Overtime',ot.toFixed(1)+'h','color:var(--amber)'],
+    ['Leave days',lv,'color:var(--red)'],
+    ['Allowance','₱'+allow.toLocaleString(),'color:var(--blue)'],
+  ].map(([l,v,s])=>`<div class="sc"><div class="sl">${l}</div><div class="sv" style="${s}">${v}</div></div>`).join('');
+}
+window.renderTCStats=renderTCStats;
+
+function toggleTCFields(){document.getElementById('tc-time-fields').style.display=document.getElementById('f-status').value==='present'?'block':'none';}
+window.toggleTCFields=toggleTCFields;
+
+function clearTCForm(){
+  document.getElementById('f-date').value=todStr();document.getElementById('f-status').value='present';
+  ['f-ci','f-co','f-reg','f-ot','f-allow','f-notes'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('f-err').textContent='';toggleTCFields();
+}
+window.clearTCForm=clearTCForm;
+
+async function saveRecord(){
+  const e=getE(curId);if(!e)return;
+  const date=document.getElementById('f-date').value,st=document.getElementById('f-status').value;
+  if(!date){document.getElementById('f-err').textContent='Date is required.';return}
+  document.getElementById('f-err').textContent='';
+  const btn=document.getElementById('save-btn');btn.disabled=true;btn.textContent='Saving…';
+  const rec={date,st,
+    ci:document.getElementById('f-ci').value,co:document.getElementById('f-co').value,
+    reg:document.getElementById('f-reg').value,ot:document.getElementById('f-ot').value,
+    allow:document.getElementById('f-allow').value,notes:document.getElementById('f-notes').value
+  };
+  if(st!=='present'){rec.ci='';rec.co='';rec.reg='';rec.ot='';}
+  const recs=[...(e.recs||[])];
+  const idx=recs.findIndex(r=>r.date===date);
+  if(idx>=0)recs[idx]=rec;else recs.push(rec);
+  recs.sort((a,b)=>b.date.localeCompare(a.date));
+  e.recs=recs;
+  await saveEmp({...e,recs});
+  await logActivity(`${e.name} — ${date} saved`);
+  btn.disabled=false;btn.innerHTML='💾 Save';
+  const t=document.getElementById('f-toast');t.style.display='block';setTimeout(()=>t.style.display='none',2000);
+}
+window.saveRecord=saveRecord;
+
+function editRec(date){
+  const e=getE(curId);if(!e)return;const r=getR(e,date);if(!r)return;
+  document.getElementById('f-date').value=r.date;document.getElementById('f-status').value=r.st;
+  document.getElementById('f-ci').value=r.ci||'';document.getElementById('f-co').value=r.co||'';
+  document.getElementById('f-reg').value=r.reg||'';document.getElementById('f-ot').value=r.ot||'';
+  document.getElementById('f-allow').value=r.allow||'';document.getElementById('f-notes').value=r.notes||'';
+  toggleTCFields();
+  document.getElementById('f-date').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function delRec(date){
+  const e=getE(curId);if(!e)return;
+  const recs=(e.recs||[]).filter(r=>r.date!==date);
+  await saveEmp({...e,recs});
+}
+
+function renderCal(){
+  const e=getE(curId);if(!e)return;
+  const tod=todStr();
+  document.getElementById('cal-title').textContent=new Date(calY,calM,1).toLocaleString('default',{month:'long',year:'numeric'});
+  const firstDay=new Date(calY,calM,1).getDay(),dim=new Date(calY,calM+1,0).getDate();
+  const cb=document.getElementById('cal-body');cb.innerHTML='';
+  for(let i=0;i<firstDay;i++){const d=document.createElement('div');d.className='cal-day empty';cb.appendChild(d);}
+  for(let d=1;d<=dim;d++){
+    const ds=`${calY}-${String(calM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const r=getR(e,ds);const cell=document.createElement('div');
+    let cls='cal-day';
+    if(ds===tod)cls+=' today-cell';
+    if(r){if(r.st==='leave')cls+=' leave';else if(r.st==='absent')cls+=' absent-rec';else cls+=' has-rec';}
+    cell.className=cls;
+    const num=document.createElement('span');num.className='cal-num';num.textContent=d;cell.appendChild(num);
+    if(r){const dot=document.createElement('div');dot.className='cal-dot';dot.style.background=r.st==='leave'?'#ca8a04':r.st==='absent'?'#dc2626':'#16a34a';cell.appendChild(dot);}
+    cell.addEventListener('click',((_ds)=>()=>{document.getElementById('f-date').value=_ds;const _e=getE(curId);if(_e&&getR(_e,_ds))editRec(_ds);})(ds));
+    cb.appendChild(cell);
+  }
+}
+function calPrev(){calM--;if(calM<0){calM=11;calY--;}renderCal();}
+function calNext(){calM++;if(calM>11){calM=0;calY++;}renderCal();}
+window.calPrev=calPrev;window.calNext=calNext;
+
+function renderTCTable(){
+  const e=getE(curId);if(!e)return;
+  const mo=document.getElementById('tc-filter-mo').value||todStr().slice(0,7);
+  document.getElementById('rec-mo-label').textContent=new Date(mo+'-01').toLocaleString('default',{month:'long',year:'numeric'});
+  const recs=(e.recs||[]).filter(r=>r.date.startsWith(mo)).sort((a,b)=>b.date.localeCompare(a.date));
+  const tbody=document.getElementById('tc-rec-body');tbody.innerHTML='';
+  if(!recs.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No records this month</td></tr>';return;}
+  recs.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.date}</td><td>${r.ci||'—'}</td><td>${r.co||'—'}</td>
+      <td>${r.reg?r.reg+'h':'—'}</td><td>${r.ot?`<span class="ot">+${r.ot}h</span>`:'—'}</td>
+      <td>${r.allow?'₱'+parseFloat(r.allow).toLocaleString():'—'}</td>
+      <td>${sbadge(r.st)}</td><td style="color:var(--text2)">${r.notes||'—'}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-sm er-btn" title="Edit">✏️</button>
+        <button class="btn btn-sm btn-d dr-btn" title="Delete">🗑</button>
+      </div></td>`;
+    tr.querySelector('.er-btn').addEventListener('click',()=>editRec(r.date));
+    tr.querySelector('.dr-btn').addEventListener('click',()=>{
+      if(tr.nextSibling&&tr.nextSibling.classList?.contains('rec-confirm')){tr.nextSibling.remove();return;}
+      const box=document.createElement('td');box.colSpan=9;box.style.cssText='padding:6px 10px;background:#fef2f2;border-bottom:1px solid #fca5a5';
+      box.innerHTML=`<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="color:#b91c1c;font-weight:500">Delete record for ${r.date}?</span><button class="btn btn-sm btn-d yes-del">Yes, delete</button><button class="btn btn-sm no-del">Cancel</button></div>`;
+      const row2=document.createElement('tr');row2.className='rec-confirm';row2.appendChild(box);
+      tr.after(row2);
+      box.querySelector('.yes-del').addEventListener('click',()=>delRec(r.date));
+      box.querySelector('.no-del').addEventListener('click',()=>row2.remove());
+    });
+    tbody.appendChild(tr);
+  });
+}
+window.renderTCTable=renderTCTable;
+
+function exportTCCSV(){
+  const e=getE(curId);if(!e)return;
+  const mo=document.getElementById('tc-filter-mo').value||todStr().slice(0,7);
+  let c='Employee,ID,Date,Clock In,Clock Out,Reg Hrs,OT Hrs,Allowance,Status,Notes\n';
+  (e.recs||[]).filter(r=>r.date.startsWith(mo)).forEach(r=>{c+=`"${e.name}",${e.id},${r.date},${r.ci||''},${r.co||''},${r.reg||''},${r.ot||''},${r.allow||''},${r.st},"${r.notes||''}"\n`;});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'}));a.download=`timecard_${e.id}_${mo}.csv`;a.click();
+}
+window.exportTCCSV=exportTCCSV;
+
+function copyLink(){
+  const url=document.getElementById('sh-url').textContent;
+  if(!url)return;
+  const row=document.getElementById('sh-click-row');
+  const cta=document.getElementById('sh-cta');
+  navigator.clipboard.writeText(url).then(()=>{
+    if(cta){cta.textContent='✓ Copied!';cta.style.color='var(--green)';}
+    if(row){row.style.background='var(--green-bg)';row.style.borderColor='var(--green-b)';}
+    const t=document.getElementById('sh-toast');t.style.display='block';
+    setTimeout(()=>{
+      t.style.display='none';
+      if(cta){cta.textContent='Click to copy';cta.style.color='';}
+      if(row){row.style.background='';row.style.borderColor='';}
+    },2000);
+  }).catch(()=>{
+    // Fallback for browsers that block clipboard
+    const ta=document.createElement('textarea');ta.value=url;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    const t=document.getElementById('sh-toast');t.style.display='block';setTimeout(()=>t.style.display='none',2000);
+  });
+}
+window.copyLink=copyLink;
+
+/* ── Employee-only view ── */
+function showEmployeeView(empId){
+  // Hide admin tabs, show only this employee timecard
+  document.querySelector('.tab-bar').style.display='none';
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-tc').classList.add('on');
+  // Hide add-record form edit/delete buttons (read-only for employee)
+  curId=empId;
+  const emp=getE(empId);
+  if(!emp){
+    document.getElementById('tc-empty').style.display='block';
+    document.getElementById('tc-main').style.display='none';
+    document.getElementById('tc-empty').innerHTML='<div style="font-size:14px;color:var(--text3);text-align:center;padding:3rem">Employee not found.<br>Please check your link.</div>';
+    return;
+  }
+  // Show read-only timecard — hide edit form & actions
+  document.querySelector('#s-tc .tc-bar').style.display='none';
+  document.getElementById('tc-empty').style.display='none';
+  document.getElementById('tc-main').style.display='block';
+  // Ensure the selector and month filter are initialised for render helpers
+  document.getElementById('tc-sel').value=empId;
+  // Remove the add/edit record card for employees
+  const editCard=document.getElementById('tc-edit-card');
+  if(editCard)editCard.style.display='none';
+  // Remove share card
+  const shareCard=document.getElementById('tc-share-card');
+  if(shareCard)shareCard.style.display='none';
+
+  document.getElementById('tc-filter-mo').value=todStr().slice(0,7);
+  calY=new Date().getFullYear();calM=new Date().getMonth();
+  renderHero();renderTCStats();renderCal();renderTCTableReadOnly();
+}
+
+function renderTCTableReadOnly(){
+  const e=getE(curId);if(!e)return;
+  const mo=document.getElementById('tc-filter-mo').value||todStr().slice(0,7);
+  document.getElementById('rec-mo-label').textContent=new Date(mo+'-01').toLocaleString('default',{month:'long',year:'numeric'});
+  const recs=(e.recs||[]).filter(r=>r.date.startsWith(mo)).sort((a,b)=>b.date.localeCompare(a.date));
+  const tbody=document.getElementById('tc-rec-body');tbody.innerHTML='';
+  // Hide Actions column header
+  const actionTh=document.querySelector('#tc-rec-body')?.closest('table')?.querySelector('th:last-child');
+  if(actionTh)actionTh.style.display='none';
+  if(!recs.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text3)">No records this month</td></tr>';return;}
+  recs.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.date}</td><td>${r.ci||'—'}</td><td>${r.co||'—'}</td>
+      <td>${r.reg?r.reg+'h':'—'}</td><td>${r.ot?'<span class="ot">+'+r.ot+'h</span>':'—'}</td>
+      <td>${r.allow?'₱'+parseFloat(r.allow).toLocaleString():'—'}</td>
+      <td>${sbadge(r.st)}</td>
+      <td style="color:var(--text2)">${r.notes||'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+window.renderTCTableReadOnly=renderTCTableReadOnly;
+
+/* ── Boot ── */
+async function boot(){
+  try{
+    setSyncing('syncing');
+    const ep=new URLSearchParams(location.search).get('emp');
+    await ensureRoster();
+    startClock();
+    startListeners(()=>{
+      // First snapshot received — employees are loaded
+      setSyncing('ok');
+      document.getElementById('loading-overlay').style.display='none';
+      document.getElementById('app').style.display='block';
+      if(ep){
+        // Employee shared link — show read-only view
+        showEmployeeView(ep);
+      } else {
+        // Admin view — full app
+        renderDash();
+        renderLogFilters();
+        syncTCSel();
+      }
+    });
+  }catch(err){
+    console.error(err);
+    document.querySelector('#loading-overlay p').textContent='Connection failed. Check your internet and reload.';
+    setSyncing('error');
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
